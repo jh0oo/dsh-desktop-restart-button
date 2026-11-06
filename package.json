@@ -1,0 +1,47 @@
+{
+  "name": "dsh-desktop-restart-button",
+  "version": "0.1.0",
+  "description": "重启按钮 + 科技感开机动画 for DeepSeek Harness Desktop (Windows): a 重启 button in the title menu bar, and a WMI restarter that survives the app's own Job Object. · 桌面端标题栏一键重启，冷启动换成科技感动画。",
+  "type": "module",
+  "main": "lib/index.js",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "desktop",
+    "electron",
+    "restart",
+    "重启"
+  ],
+  "files": [
+    "lib",
+    "scripts",
+    "assets",
+    "README.md",
+    "README.zh.md",
+    "cordis.patch.yml",
+    "screenshots.json",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "platforms": [
+        "win32"
+      ]
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JH0oo/dsh-desktop-restart-button.git"
+  },
+  "homepage": "https://github.com/JH0oo/dsh-desktop-restart-button#readme",
+  "bugs": {
+    "url": "https://github.com/JH0oo/dsh-desktop-restart-button/issues"
+  }
+}
