@@ -1,4 +1,4 @@
-# Restart the DeepSeek Harness desktop app.
+﻿# Restart the DeepSeek Harness desktop app.
 # Launched OUTSIDE the desktop app's Job Object (via WMI Win32_Process.Create), so it
 # survives the app being killed and can relaunch it.
 #
@@ -27,6 +27,26 @@ function Log([string]$m) {
 function AppProcs { @(Get-Process -Name $ProcessName -ErrorAction SilentlyContinue) }
 function PidsOf($ps) { ($ps | ForEach-Object { $_.Id }) -join ',' }
 
+# Job objects are inherited by children only, so "is this process a descendant of the
+# app?" is the check that actually matters. The old IsProcessInJob test also fired for
+# unrelated jobs the shell puts every windowed app into, which made the guard refuse to
+# restart on machines where the WMI child was perfectly safe.
+function Test-DescendsFromApp {
+  $appPids = @{}
+  foreach ($p in (AppProcs)) { $appPids[[int]$p.Id] = $true }
+  if ($appPids.Count -eq 0) { return $false }
+  $procId = $PID
+  for ($i = 0; $i -lt 12; $i++) {
+    $me = Get-CimInstance Win32_Process -Filter "ProcessId = $procId" -ErrorAction SilentlyContinue
+    if (-not $me) { return $false }
+    $parentId = [int]$me.ParentProcessId
+    if ($parentId -le 4) { return $false }
+    if ($appPids.ContainsKey($parentId)) { return $true }
+    $procId = $parentId
+  }
+  return $false
+}
+
 # True when this process lives in the desktop app's Job Object. A restarter in there
 # dies together with the app it just killed, so the app would close and never come back.
 function Test-InJobObject {
@@ -47,7 +67,7 @@ Log "---- restarter started (delay ${DelaySeconds}s, oldPort $OldPort) ----"
 # Safety net: if we were started inside the app's job (e.g. by hand, or by any code
 # running in the app), killing the app would kill us too. Hand off to the WMI launcher
 # that creates the restarter outside the job, then leave without touching the app.
-if (Test-InJobObject) {
+if (Test-DescendsFromApp) {
   # Loop breaker: if a WMI child still lands inside the job, re-dispatching again would
   # keep spawning restarters forever and the app would never restart (the UI would sit
   # on "restarting" until the user quits by hand).
@@ -61,7 +81,7 @@ if (Test-InJobObject) {
     Log "guard: the app could not be restarted from here; ask the user to quit it by hand"
     exit 0
   }
-  Log "guard: restarting from inside the app job object -> re-dispatching through WMI"
+  Log "guard: running inside the app process tree -> re-dispatching through WMI"
   $launcher = Join-Path $PSScriptRoot 'launch.ps1'
   if ($DryRun) {
     Log "guard: DRY RUN, would hand off via $launcher"
