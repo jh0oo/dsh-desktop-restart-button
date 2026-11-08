@@ -48,6 +48,19 @@ Log "---- restarter started (delay ${DelaySeconds}s, oldPort $OldPort) ----"
 # running in the app), killing the app would kill us too. Hand off to the WMI launcher
 # that creates the restarter outside the job, then leave without touching the app.
 if (Test-InJobObject) {
+  # Loop breaker: if a WMI child still lands inside the job, re-dispatching again would
+  # keep spawning restarters forever and the app would never restart (the UI would sit
+  # on "restarting" until the user quits by hand).
+  $marker = Join-Path $env:TEMP 'dsh-desktop-restart-button.handoff'
+  $lastHandoff = $null
+  if (Test-Path $marker) {
+    try { $lastHandoff = [datetime]::Parse((Get-Content $marker -Raw).Trim()) } catch {}
+  }
+  if ($lastHandoff -and ((Get-Date) - $lastHandoff).TotalSeconds -lt 30) {
+    Log "guard: re-dispatch already attempted within 30s -> refusing to loop, exiting"
+    Log "guard: the app could not be restarted from here; ask the user to quit it by hand"
+    exit 0
+  }
   Log "guard: restarting from inside the app job object -> re-dispatching through WMI"
   $launcher = Join-Path $PSScriptRoot 'launch.ps1'
   if ($DryRun) {
@@ -57,6 +70,7 @@ if (Test-InJobObject) {
   }
   if (Test-Path $launcher) {
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    Set-Content -Path $marker -Value (Get-Date).ToString('o') -Encoding ascii
     $handoff = & $psExe -NoProfile -ExecutionPolicy Bypass -File $launcher `
       -ScriptPath $PSCommandPath -DelaySeconds 2 -OldPort $OldPort `
       -Exe $Exe -ProcessName $ProcessName -LogPath $LogPath
